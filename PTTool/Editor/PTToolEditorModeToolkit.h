@@ -108,6 +108,9 @@ public:
 	virtual void SetSplineClassItems();
 	virtual void ShutdownUI() override;
 
+	/** Build and return the toolkit widget for standalone/reuse scenarios */
+	TSharedRef<SWidget> BuildStandaloneWidget();
+
 	void OnActorDeleted(AActor* DeletedActor);
 	void OnActorPropertyChanged(UObject* ObjectBeingModified, FPropertyChangedEvent& PropertyChangedEvent);
 

@@ -993,5 +993,385 @@ void FPTToolEditorModeToolkit::MoveSplineActorRowDown(const FSplineActorRowPtr& 
 	RefreshSplineActorList();
 }
 
+TSharedRef<SWidget> FPTToolEditorModeToolkit::BuildStandaloneWidget()
+{
+	// Initialize necessary components if not already done
+	if (!SettingsView.IsValid())
+	{
+		SetupPropertyEditorModule(this);
+	}
+	
+	if (!SplineManager)
+	{
+		InitializePTSplineManager();
+	}
+
+	if (SplineActorRows.Num() == 0)
+	{
+		RefreshSplineActorList();
+	}
+
+	if (SplineClassItems.Num() == 0)
+	{
+		SetSplineClassItems();
+	}
+
+	FCoreUObjectDelegates::OnObjectPropertyChanged.AddRaw(this, &FPTToolEditorModeToolkit::OnActorPropertyChanged);
+
+	SelectedTab = EPTToolTab::Generate; // 默认选中"生成"
+
+	//容器
+	TSharedRef<SWidget> Widget = SNew(SVerticalBox)
+
+		//Menu Bar
+		+ SVerticalBox::Slot().AutoHeight().Padding(2)
+		[
+			SNew(SHorizontalBox)
+			//Generate Tab
+			+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+			[
+				SNew(SCheckBox)
+				.Style(FCoreStyle::Get(), "ToggleButtonCheckbox")
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+				{
+					SelectedTab = EPTToolTab::Generate;
+				})
+				.IsChecked_Lambda([this]()
+				{
+					return SelectedTab == EPTToolTab::Generate ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+				})
+				[
+					SNew(STextBlock).Text(FText::FromString("Generate"))
+				]
+			]
+			//Manage Tab
+			+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+			[
+				SNew(SCheckBox)
+				.Style(FCoreStyle::Get(), "ToggleButtonCheckbox")
+				.IsChecked_Lambda([this]()
+				{
+					return SelectedTab == EPTToolTab::Manage ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+				})
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+				{
+					SelectedTab = EPTToolTab::Manage;
+				})
+				[
+					SNew(STextBlock).Text(FText::FromString("Manage"))
+				]
+			]
+			//Test Tab
+			+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+			[
+				SNew(SCheckBox)
+				.Style(FCoreStyle::Get(), "ToggleButtonCheckbox")
+				.IsChecked_Lambda([this]() { return SelectedTab == EPTToolTab::Test ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState) { SelectedTab = EPTToolTab::Test; })
+				[
+					SNew(STextBlock).Text(FText::FromString("Test"))
+				]
+			]
+		]
+
+		//Content Area
+		+ SVerticalBox::Slot().AutoHeight().Padding(4)
+		[
+			SNew(SBox).MinDesiredHeight(100)
+			[
+				SNew(SVerticalBox)
+
+				// Generate 内容面板（包括了 Spline 列表，待生成的Spline 类型，放置 Spline 的属性面板）
+				+ SVerticalBox::Slot().AutoHeight().Padding(2)
+				[
+					SNew(SBox).Visibility_Lambda([this]()
+					{
+						return SelectedTab == EPTToolTab::Generate ? EVisibility::Visible : EVisibility::Collapsed;
+					})
+					[
+						SNew(SVerticalBox)
+
+						// 下拉标题
+						+ SVerticalBox::Slot().AutoHeight().Padding(2)
+						[
+							SNew(STextBlock).Text(FText::FromString("Select SplineActor Class:"))
+						]
+
+						//List
+						+ SVerticalBox::Slot().AutoHeight().Padding(4)
+						[
+							SAssignNew(SplineListView_Generate, SListView<FSplineActorRowPtr>)
+							.ListItemsSource(&SplineActorRows)
+							.OnGenerateRow_Lambda([](FSplineActorRowPtr InItem, const TSharedRef<STableViewBase>& OwnerTable)
+							{
+								return SNew(STableRow<FSplineActorRowPtr>, OwnerTable)
+									[
+										SNew(SHorizontalBox)
+										+ SHorizontalBox::Slot().FillWidth(2.5f)
+										[
+											SNew(STextBlock).Text(FText::FromString(FString::FromInt(InItem->GetOrder())))
+										]
+										+ SHorizontalBox::Slot().FillWidth(2.5f)
+										[
+											SNew(STextBlock).Text(FText::FromString(InItem->GetName()))
+										]
+										+ SHorizontalBox::Slot().FillWidth(2.5f)
+										[
+											SNew(STextBlock).Text(FText::FromString(InItem->GetLocation().ToString()))
+										]
+									];
+							})
+							.OnSelectionChanged_Lambda([this](FSplineActorRowPtr InItem, ESelectInfo::Type)
+							{
+								SelectedRow = InItem;
+							})
+							.OnMouseButtonDoubleClick_Lambda([this](FSplineActorRowPtr Item)
+							{
+								// 切换到 Manage 页签
+								SelectedTab = EPTToolTab::Manage;
+								if (Item.IsValid() && Item->GetActor().IsValid())
+								{
+									GEditor->SelectNone(false, true); // 清除已有选择
+									GEditor->SelectActor(Item->GetActor().Get(), true, true); // 选择 Actor
+
+									GEditor->MoveViewportCamerasToActor(*Item->GetActor().Get(), false); // 移动视图到 Actor
+								}
+							})
+							.HeaderRow
+							(
+								SNew(SHeaderRow)
+								+ SHeaderRow::Column("Order")
+								.DefaultLabel(FText::FromString("Spline Order"))
+								.FillWidth(0.5f)
+								+ SHeaderRow::Column("Name")
+								.DefaultLabel(FText::FromString("Actor Name"))
+								.FillWidth(0.5f)
+								+ SHeaderRow::Column("Location")
+								.DefaultLabel(FText::FromString("Location"))
+								.FillWidth(0.5f)
+							)
+						]
+
+						// 类型下拉框
+						+ SVerticalBox::Slot().AutoHeight().Padding(2)
+						[
+							SNew(SComboBox<TSharedPtr<FSplineClassItem>>)
+							.OptionsSource(&SplineClassItems)
+							.OnGenerateWidget_Lambda([](TSharedPtr<FSplineClassItem> Item)
+							{
+								return SNew(STextBlock).Text(FText::FromString(Item->ToString()));
+							})
+							.OnSelectionChanged_Lambda([this](TSharedPtr<FSplineClassItem> NewItem, ESelectInfo::Type)
+							{
+								SelectedSplineItem = NewItem;
+							})
+							.InitiallySelectedItem(SelectedSplineItem)
+							[
+								SNew(STextBlock).Text_Lambda([this]()
+								{
+									return SelectedSplineItem.IsValid() ? FText::FromString(SelectedSplineItem->ToString()) : FText::FromString("Select");
+								})
+							]
+						]
+
+						//变换面板
+						+ SVerticalBox::Slot().AutoHeight().Padding(4)
+						[
+							SettingsView.ToSharedRef()
+						]
+
+						// 按钮
+						+ SVerticalBox::Slot().AutoHeight().Padding(4)
+						[
+							SNew(SButton)
+							.Text(FText::FromString("Place SplineActor in the Scene"))
+							.OnClicked_Lambda([this]()
+							{
+								if (SelectedSplineItem.IsValid() && SelectedSplineItem->Class)
+								{
+									if (UWorld* World = GEditor->GetEditorWorldContext().World())
+									{
+										FActorSpawnParameters Params;
+										FTransform SpawnTransform;
+
+										Params.Name = SettingsObject->SplineActorName;
+										Params.NameMode = FActorSpawnParameters::ESpawnActorNameMode::Requested;
+
+										SpawnTransform.SetLocation(SettingsObject->Location);
+										SpawnTransform.SetRotation(SettingsObject->Rotation.Quaternion());
+										SpawnTransform.SetScale3D(SettingsObject->Scale);
+
+										// Auto-resolve order collisions in the current level.
+										const int32 DesiredOrder = SettingsObject ? SettingsObject->TestOrder : 0;
+										const int32 ResolvedOrder = FindNextAvailableSplineOrder(World, DesiredOrder);
+
+										APTSplinePathActor* ref = World->SpawnActor<APTSplinePathActor>(SelectedSplineItem->Class, SpawnTransform, Params);
+
+										// 添加标记，便于识别和管理
+										ref->Tags.Add(TEXT("PTTool_Generated"));
+
+										// 设置输入的属性
+										ref->SplineTestOrder = ResolvedOrder;
+										ref->CameraFOV = SettingsObject->CameraFOV;
+										ref->SplineVelocity = SettingsObject->SplineVelocity;
+
+										// Optional: reflect the resolved order back into the settings so UI matches.
+										if (SettingsObject && SettingsObject->TestOrder != ResolvedOrder)
+										{
+											SettingsObject->Modify();
+											SettingsObject->TestOrder = ResolvedOrder;
+										}
+
+										// 改进：根据 Actor 朝向和间距均匀放置初始控制点
+										{
+											// 确保至少有 2 个点
+											int32 NumPoints = FMath::Max(2, SettingsObject->InitSplinePoints);
+
+											// 基点使用 Actor 的位置（SpawnTransform 也可）
+											const FVector BaseLocation = ref->GetActorLocation();
+
+											// 使用 SpawnTransform 的朝向作为前进方向（保证点随 Actor 旋转）
+											const FVector Forward = SpawnTransform.GetRotation().RotateVector(FVector::ForwardVector).GetSafeNormal();
+
+											// 间距：优先参考 SplineVelocity（若有意义），否则使用默认 150
+											const float DefaultSpacing = 150.0f;
+											float Spacing = DefaultSpacing;
+											if (SettingsObject->SplineVelocity > KINDA_SMALL_NUMBER)
+											{
+												// 一个启发式转换：速度映射到距离（可根据需要调整系数）
+												Spacing = FMath::Clamp(SettingsObject->SplineVelocity * 100.0f, 10.0f, 2000.0f);
+											}
+
+											for (int32 i = 0; i < NumPoints; ++i)
+											{
+												const FVector PointLocation = BaseLocation + Forward * Spacing * i;
+												ref->AddSplinePoint(PointLocation);
+											}
+										}
+										ref->SplineComponent->UpdateEditorMeshes();
+
+										if (GEditor)
+										{
+											// 通知编辑器该 Actor 是关卡的一部分并需要保存
+											ref->SetFlags(RF_Transactional);
+											ref->Modify();
+
+											// 标记关卡为脏，需要保存
+											if (UPackage* Pkg = World->GetOutermost())
+											{
+												Pkg->SetDirtyFlag(true);
+											}
+
+										}
+										UE_LOG(LogTemp, Warning, TEXT("Spawned SplineActor: %s"), *SelectedSplineItem->Class->GetName());
+									}
+								}
+								RefreshSplineActorList();
+								return FReply::Handled();
+							})
+						]
+					]
+				]
+
+				// Manage 面板
+				+ SVerticalBox::Slot().AutoHeight().Padding(2)
+				[
+					SNew(SBox).Visibility_Lambda([this]() { return SelectedTab == EPTToolTab::Manage ? EVisibility::Visible : EVisibility::Collapsed; })
+					[
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot().AutoHeight().Padding(2)
+						[
+							SNew(SBorder)
+							[
+								SNew(SVerticalBox)
+								+ SVerticalBox::Slot().AutoHeight()
+								[
+									SAssignNew(SplineListView_Manage, SListView<FSplineActorRowPtr>)
+									.ListItemsSource(&SplineActorRows)
+									.OnGenerateRow_Lambda([this](FSplineActorRowPtr InItem, const TSharedRef<STableViewBase>& OwnerTable)
+									{
+										return SNew(FSplineActorTableRow, OwnerTable)
+											.Item(InItem)
+											.Toolkit(this);
+									})
+									.OnSelectionChanged_Lambda([this](FSplineActorRowPtr InItem, ESelectInfo::Type)
+									{
+										SelectedRow = InItem;
+										SelectedActorGuid = InItem.IsValid() ? InItem->ActorGuid : FGuid();
+										SelectedActorPath = InItem.IsValid() ? InItem->ActorPath : FSoftObjectPath();
+										if (ManageActorDetailsView.IsValid())
+										{
+											APTSplinePathActor* SelActor = (InItem.IsValid() && InItem->GetActor().IsValid()) ? InItem->GetActor().Get() : nullptr;
+											ManageActorDetailsView->SetObject(SelActor);
+										}
+									})
+									.OnMouseButtonDoubleClick_Lambda([this](FSplineActorRowPtr Item)
+									{
+										if (Item.IsValid() && Item->GetActor().IsValid())
+										{
+											GEditor->SelectNone(false, true);
+											GEditor->SelectActor(Item->GetActor().Get(), true, true);
+											GEditor->MoveViewportCamerasToActor(*Item->GetActor().Get(), false);
+										}
+									})
+									.HeaderRow
+									(
+										SNew(SHeaderRow)
+										+ SHeaderRow::Column("Order")
+										.DefaultLabel(FText::FromString("Order"))
+										.FixedWidth(60.0f)
+										+ SHeaderRow::Column("Name")
+										.DefaultLabel(FText::FromString("Actor Name"))
+										.FillWidth(0.45f)
+										+ SHeaderRow::Column("Location")
+										.DefaultLabel(FText::FromString("Location"))
+										.FillWidth(0.55f)
+										+ SHeaderRow::Column("Actions")
+										.DefaultLabel(FText::FromString(""))
+										.HAlignHeader(HAlign_Right)
+										.HAlignCell(HAlign_Right)
+										.VAlignCell(VAlign_Center)
+										.FixedWidth(90.0f)
+									)
+								]
+							]
+						]
+						+ SVerticalBox::Slot().AutoHeight().Padding(4, 6, 4, 2)
+						[
+							SNew(STextBlock)
+							.Text(FText::FromString("Selected Actor Properties"))
+						]
+						+ SVerticalBox::Slot().AutoHeight().Padding(4)
+						[
+							SNew(SBox)
+							.MinDesiredHeight(220)
+							[
+								ManageActorDetailsView.IsValid() ? ManageActorDetailsView.ToSharedRef() : SNullWidget::NullWidget
+							]
+						]
+					]
+				]
+
+				// Test 面板
+				+ SVerticalBox::Slot().AutoHeight().Padding(4)
+				[
+					SNew(SButton)
+					.Visibility_Lambda([this]() { return SelectedTab == EPTToolTab::Test ? EVisibility::Visible : EVisibility::Collapsed; })
+					.Text(FText::FromString("Start Test"))
+					.OnClicked_Lambda([this]()
+					{
+						UE_LOG(LogTemp, Log, TEXT("Test button clicked."));
+
+						ExecuteTest();
+
+						return FReply::Handled();
+					})
+				]
+			]
+		];
+
+	return Widget;
+}
+
 #undef LOCTEXT_NAMESPACE
 
