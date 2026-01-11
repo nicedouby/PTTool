@@ -16,8 +16,13 @@ class FPTToolEditorModeToolkit;
 struct FSplineActorRow
 {
 	TWeakObjectPtr<APTSplinePathActor> Actor;
+	FGuid ActorGuid;
+	FSoftObjectPath ActorPath;
 
-	FSplineActorRow(APTSplinePathActor* InActor) : Actor(InActor)
+	FSplineActorRow(APTSplinePathActor* InActor)
+		: Actor(InActor)
+		, ActorGuid(InActor ? InActor->GetActorGuid() : FGuid())
+		, ActorPath(InActor)
 	{
 	}
 	int GetOrder() const
@@ -129,6 +134,10 @@ public:
 	TSharedPtr<SListView<FSplineActorRowPtr>> SplineListView_Generate;
 	
 	FSplineActorRowPtr SelectedRow;
+
+	// 用于在列表刷新/重建后恢复选中状态
+	FGuid SelectedActorGuid;
+	FSoftObjectPath SelectedActorPath;
 
 	UPTToolSettingsObject* SettingsObject = nullptr;
 

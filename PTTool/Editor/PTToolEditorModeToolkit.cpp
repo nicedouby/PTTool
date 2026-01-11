@@ -528,6 +528,8 @@ void FPTToolEditorModeToolkit::Init(const TSharedPtr<IToolkitHost>& InitToolkitH
 									.OnSelectionChanged_Lambda([this](FSplineActorRowPtr InItem, ESelectInfo::Type)
 									{
 										SelectedRow = InItem;
+										SelectedActorGuid = InItem.IsValid() ? InItem->ActorGuid : FGuid();
+										SelectedActorPath = InItem.IsValid() ? InItem->ActorPath : FSoftObjectPath();
 										if (ManageActorDetailsView.IsValid())
 										{
 											APTSplinePathActor* SelActor = (InItem.IsValid() && InItem->GetActor().IsValid()) ? InItem->GetActor().Get() : nullptr;
@@ -626,6 +628,25 @@ TSharedPtr<SWidget> FPTToolEditorModeToolkit::GetInlineContent() const
 
 void FPTToolEditorModeToolkit::RefreshSplineActorList()
 {
+	// 记录当前选中（当列表重建时用来恢复）
+	if (SelectedRow.IsValid() && SelectedRow->GetActor().IsValid())
+	{
+		SelectedActorGuid = SelectedRow->ActorGuid;
+		SelectedActorPath = SelectedRow->ActorPath;
+	}
+	else if (ManageActorDetailsView.IsValid())
+	{
+		// 如果 DetailsView 里当前有对象，也尝试从它恢复 key
+		if (UObject* Obj = ManageActorDetailsView->GetSelectedObjects().Num() > 0 ? ManageActorDetailsView->GetSelectedObjects()[0].Get() : nullptr)
+		{
+			if (APTSplinePathActor* ActorFromDetails = Cast<APTSplinePathActor>(Obj))
+			{
+				SelectedActorGuid = ActorFromDetails->GetActorGuid();
+				SelectedActorPath = FSoftObjectPath(ActorFromDetails);
+			}
+		}
+	}
+
 	SplineActorRows.Empty();
 	SplineManager->Splines.Empty();
 	
@@ -667,6 +688,52 @@ void FPTToolEditorModeToolkit::RefreshSplineActorList()
 	if (SplineListView_Manage.IsValid())
 	{
 		SplineListView_Manage->RequestListRefresh();
+
+		// 列表重建后恢复选中，避免属性修改触发刷新导致失焦
+		FSplineActorRowPtr RowToSelect;
+		if (SelectedActorGuid.IsValid())
+		{
+			for (const FSplineActorRowPtr& Row : SplineActorRows)
+			{
+				if (Row.IsValid() && Row->ActorGuid == SelectedActorGuid)
+				{
+					RowToSelect = Row;
+					break;
+				}
+			}
+		}
+		if (!RowToSelect.IsValid() && SelectedActorPath.IsValid())
+		{
+			for (const FSplineActorRowPtr& Row : SplineActorRows)
+			{
+				if (Row.IsValid() && Row->ActorPath == SelectedActorPath)
+				{
+					RowToSelect = Row;
+					break;
+				}
+			}
+		}
+
+		if (RowToSelect.IsValid())
+		{
+			SelectedRow = RowToSelect;
+			SplineListView_Manage->SetSelection(RowToSelect, ESelectInfo::Direct);
+
+			if (ManageActorDetailsView.IsValid())
+			{
+				APTSplinePathActor* SelActor = RowToSelect->GetActor().Get();
+				ManageActorDetailsView->SetObject(SelActor);
+			}
+		}
+		else
+		{
+			// 如果选中的 Actor 已不存在/不在列表中，清空面板
+			SelectedRow.Reset();
+			if (ManageActorDetailsView.IsValid())
+			{
+				ManageActorDetailsView->SetObject(nullptr);
+			}
+		}
 	}
 }
 
@@ -747,6 +814,19 @@ void FPTToolEditorModeToolkit::OnActorPropertyChanged(UObject* ObjectBeingModifi
 	if (!CastActor)
 	{
 		return;
+	}
+
+	// 只在会影响 Manage 列表显示/排序的属性变化时刷新，避免 DetailsView 编辑过程中反复重建列表导致失焦
+	FProperty* ChangedProperty = PropertyChangedEvent.Property;
+	if (ChangedProperty)
+	{
+		const FName PropName = ChangedProperty->GetFName();
+		static const FName Name_SplineTestOrder(TEXT("SplineTestOrder"));
+		// 如果后续列表显示字段新增，可在这里补充
+		if (PropName != Name_SplineTestOrder)
+		{
+			return;
+		}
 	}
 
 	RefreshSplineActorList();
