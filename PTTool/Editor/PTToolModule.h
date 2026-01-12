@@ -11,6 +11,9 @@
 class FPTToolModule : public IModuleInterface
 {
 public:
+	static const FName PTToolLegacyTabId;
+	static void TryInvokeLegacyTab();
+
 	void RegisterVisualizer(double X);
 	/** IModuleInterface implementation */
 	virtual void StartupModule() override;

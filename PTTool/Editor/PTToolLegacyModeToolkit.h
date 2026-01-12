@@ -4,7 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "Toolkits/BaseToolkit.h"
-#include "PTToolEditorModeToolkit.h"
+
+class UEdMode;
+class FPTToolEditorModeToolkit;
 
 /**
  * Legacy mode toolkit wrapper that reuses the existing FPTToolEditorModeToolkit.
@@ -18,8 +20,7 @@ public:
 
 	// FModeToolkit interface
 	virtual void Init(const TSharedPtr<IToolkitHost>& InitToolkitHost) override;
-	virtual void RegisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
-	virtual void UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
+
 
 	// IToolkit interface
 	virtual FName GetToolkitFName() const override;

@@ -1,8 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "PTToolEditorModeCommands.h"
-#include "PTToolEditorMode.h"
-#include "EditorStyleSet.h"
 
 #define LOCTEXT_NAMESPACE "PTToolEditorModeCommands"
 

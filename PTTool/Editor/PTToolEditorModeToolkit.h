@@ -3,12 +3,12 @@
 #pragma once
 
 #include "Toolkits/BaseToolkit.h"
-#include "PTToolEditorMode.h"
 #include "PTToolSettingsObject.h"
 #include "PTTool/Core/PTSplineManager.h"
 // Slate widgets
 #include "Widgets/Views/STableRow.h"
 
+class UEdMode;
 class UPTToolSettingsObject;
 
 class FPTToolEditorModeToolkit;
@@ -92,7 +92,7 @@ class FPTToolEditorModeToolkit : public FModeToolkit
 {
 public:
 	FPTToolEditorModeToolkit();
-	virtual ~FPTToolEditorModeToolkit() override = default;
+	virtual ~FPTToolEditorModeToolkit() override;
 
 	/** FModeToolkit interface */
 	virtual void Init(const TSharedPtr<IToolkitHost>& InitToolkitHost, TWeakObjectPtr<UEdMode> InOwningMode) override;
@@ -148,6 +148,5 @@ public:
 
 private:
 	// Transient manager object used by the editor mode/toolkit.
-	UPROPERTY()
-	TObjectPtr<UPTSplineManager> SplineManager = nullptr;
-}; 
+	UPTSplineManager* SplineManager = nullptr;
+};

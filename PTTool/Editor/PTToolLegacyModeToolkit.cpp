@@ -2,7 +2,6 @@
 
 #include "PTToolLegacyModeToolkit.h"
 #include "PTToolEditorModeToolkit.h"
-#include "EditorModeManager.h"
 
 #define LOCTEXT_NAMESPACE "PTToolLegacyModeToolkit"
 
@@ -22,25 +21,14 @@ void FPTToolLegacyModeToolkit::Init(const TSharedPtr<IToolkitHost>& InitToolkitH
 
 	// Create the inner toolkit that contains the actual UI logic
 	InnerToolkit = MakeShareable(new FPTToolEditorModeToolkit);
-	
+
 	// Build the widget using the inner toolkit's standalone widget builder
 	ToolkitWidget = InnerToolkit->BuildStandaloneWidget();
-	
-	// Call the base class Init
+
+	// Call the base class Init (signature differs across UE versions)
 	FModeToolkit::Init(InitToolkitHost);
 
 	UE_LOG(LogTemp, Log, TEXT("FPTToolLegacyModeToolkit::Init() completed"));
-}
-
-void FPTToolLegacyModeToolkit::RegisterTabSpawners(const TSharedRef<FTabManager>& InTabManager)
-{
-	// We don't register any tabs since we're using GetInlineContent
-	// The widget will be displayed inline in the mode panel
-}
-
-void FPTToolLegacyModeToolkit::UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager)
-{
-	// Nothing to unregister
 }
 
 FName FPTToolLegacyModeToolkit::GetToolkitFName() const

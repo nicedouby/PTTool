@@ -2,35 +2,16 @@
 
 #pragma once
 
-#include "Tools/UEdMode.h"
-#include "PTToolEditorMode.generated.h"
-
-/**
- * This class provides an example of how to extend a UEdMode to add some simple tools
- * using the InteractiveTools framework. The various UEdMode input event handlers (see UEdMode.h)
- * forward events to a UEdModeInteractiveToolsContext instance, which
- * has all the logic for interacting with the InputRouter, ToolManager, etc.
- * The functions provided here are the minimum to get started inserting some custom behavior.
- * Take a look at the UEdMode markup for more extensibility options.
+/*
+ * Deprecated (removed):
+ *
+ * This project previously had a UCLASS-based UEdMode (UPTToolEditorMode).
+ * The plugin has migrated to the legacy FEdMode implementation (see PTToolLegacyEdMode.*).
+ *
+ * IMPORTANT:
+ * Keeping an old UCLASS/GENERATED_BODY() editor mode header under Source/ can make UHT/UBT
+ * emit a corresponding *.gen.cpp and unity build include even if you try to ifdef it out,
+ * which results in missing generated file errors and/or duplicate editor modes.
+ *
+ * If you need the old implementation for reference, retrieve it from version control history.
  */
-UCLASS()
-class UPTToolEditorMode : public UEdMode
-{
-	GENERATED_BODY()
-
-public:
-	const static FEditorModeID EM_PTToolEditorModeId;
-
-	static FString SimpleToolName;
-	static FString InteractiveToolName;
-
-	UPTToolEditorMode();
-	virtual ~UPTToolEditorMode();
-
-	/** UEdMode interface */
-	virtual void Enter() override;
-	virtual void ActorSelectionChangeNotify() override;
-	virtual void CreateToolkit() override;
-	virtual TMap<FName, TArray<TSharedPtr<FUICommandInfo>>> GetModeCommands() const override;
-	virtual bool UsesToolkits() const override { return true; }
-};

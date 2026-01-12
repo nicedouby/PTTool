@@ -22,8 +22,11 @@ public:
 	// FEdMode interface
 	virtual void Enter() override;
 	virtual void Exit() override;
+	virtual bool UsesToolkits() const override { return true; }
 	virtual bool UsesTransformWidget() const override;
 	virtual bool UsesTransformWidget(UE::Widget::EWidgetMode CheckMode) const override;
+
+	// (Legacy) Nomad-tab UI path removed; UI is now provided via the mode toolkit's inline content.
 
 private:
 	TSharedPtr<FPTToolLegacyModeToolkit> LegacyToolkit;

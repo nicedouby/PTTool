@@ -1,7 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "PTToolEditorModeToolkit.h"
-#include "PTToolEditorMode.h"
+// #include "PTToolEditorMode.h" // removed: legacy-only workflow no longer uses the UEdMode-based implementation
 #include "Engine/Selection.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
@@ -118,6 +118,24 @@ namespace
 FPTToolEditorModeToolkit::FPTToolEditorModeToolkit()
 	: SelectedTab(EPTToolTab::Generate)
 {
+}
+
+FPTToolEditorModeToolkit::~FPTToolEditorModeToolkit()
+{
+	// Nomad tabs / other ownership paths may not call ShutdownUI().
+	FCoreUObjectDelegates::OnObjectPropertyChanged.RemoveAll(this);
+
+	if (SplineManager)
+	{
+		SplineManager->RemoveFromRoot();
+		SplineManager = nullptr;
+	}
+
+	if (SettingsObject)
+	{
+		SettingsObject->RemoveFromRoot();
+		SettingsObject = nullptr;
+	}
 }
 
 void FSplineActorTableRow::Construct(const FArguments& InArgs, const TSharedRef<STableViewBase>& InOwnerTableView)
@@ -793,7 +811,13 @@ void FPTToolEditorModeToolkit::ShutdownUI()
 	FModeToolkit::ShutdownUI();
 	if (SplineManager)
 	{
+		SplineManager->RemoveFromRoot();
 		SplineManager = nullptr;
+	}
+	if (SettingsObject)
+	{
+		SettingsObject->RemoveFromRoot();
+		SettingsObject = nullptr;
 	}
 	FCoreUObjectDelegates::OnObjectPropertyChanged.RemoveAll(this);
 }
@@ -1015,8 +1039,6 @@ TSharedRef<SWidget> FPTToolEditorModeToolkit::BuildStandaloneWidget()
 	{
 		SetSplineClassItems();
 	}
-
-	FCoreUObjectDelegates::OnObjectPropertyChanged.AddRaw(this, &FPTToolEditorModeToolkit::OnActorPropertyChanged);
 
 	SelectedTab = EPTToolTab::Generate; // 默认选中"生成"
 
