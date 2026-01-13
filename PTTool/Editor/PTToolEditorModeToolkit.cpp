@@ -122,18 +122,33 @@ FPTToolEditorModeToolkit::FPTToolEditorModeToolkit()
 
 FPTToolEditorModeToolkit::~FPTToolEditorModeToolkit()
 {
-	// Nomad tabs / other ownership paths may not call ShutdownUI().
+	// Always unbind first.
 	FCoreUObjectDelegates::OnObjectPropertyChanged.RemoveAll(this);
 
-	if (SplineManager)
+	// During engine exit/teardown, the UObject array may already be shutting down.
+	// Touching UObject APIs (including RemoveFromRoot) can assert.
+	if (IsEngineExitRequested())
 	{
-		SplineManager->RemoveFromRoot();
+		SplineManager = nullptr;
+		SettingsObject = nullptr;
+		return;
+	}
+
+	if (SplineManager && IsValid(SplineManager))
+	{
+		if (SplineManager->IsRooted())
+		{
+			SplineManager->RemoveFromRoot();
+		}
 		SplineManager = nullptr;
 	}
 
-	if (SettingsObject)
+	if (SettingsObject && IsValid(SettingsObject))
 	{
-		SettingsObject->RemoveFromRoot();
+		if (SettingsObject->IsRooted())
+		{
+			SettingsObject->RemoveFromRoot();
+		}
 		SettingsObject = nullptr;
 	}
 }
@@ -808,18 +823,50 @@ void FPTToolEditorModeToolkit::SetSplineClassItems()
 
 void FPTToolEditorModeToolkit::ShutdownUI()
 {
-	FModeToolkit::ShutdownUI();
-	if (SplineManager)
+	// Unbind first to stop re-entrancy while we tear down.
+	FCoreUObjectDelegates::OnObjectPropertyChanged.RemoveAll(this);
+
+	// If we're exiting, don't touch UObjects. Just drop pointers.
+	if (IsEngineExitRequested())
 	{
-		SplineManager->RemoveFromRoot();
+		SplineManager = nullptr;
+		SettingsObject = nullptr;
+		SettingsView.Reset();
+		ManageActorDetailsView.Reset();
+		return;
+	}
+
+	// Drop UObject references held by details panels early.
+	if (ManageActorDetailsView.IsValid())
+	{
+		ManageActorDetailsView->SetObject(nullptr);
+	}
+	if (SettingsView.IsValid())
+	{
+		SettingsView->SetObject(nullptr);
+	}
+
+	FModeToolkit::ShutdownUI();
+
+	if (SplineManager && IsValid(SplineManager))
+	{
+		if (SplineManager->IsRooted())
+		{
+			SplineManager->RemoveFromRoot();
+		}
 		SplineManager = nullptr;
 	}
-	if (SettingsObject)
+	if (SettingsObject && IsValid(SettingsObject))
 	{
-		SettingsObject->RemoveFromRoot();
+		if (SettingsObject->IsRooted())
+		{
+			SettingsObject->RemoveFromRoot();
+		}
 		SettingsObject = nullptr;
 	}
-	FCoreUObjectDelegates::OnObjectPropertyChanged.RemoveAll(this);
+
+	SettingsView.Reset();
+	ManageActorDetailsView.Reset();
 }
 
 void FPTToolEditorModeToolkit::OnActorDeleted(AActor* DeletedActor)
@@ -832,10 +879,17 @@ void FPTToolEditorModeToolkit::OnActorDeleted(AActor* DeletedActor)
 
 void FPTToolEditorModeToolkit::OnActorPropertyChanged(UObject* ObjectBeingModified, FPropertyChangedEvent& PropertyChangedEvent)
 {
-	if (!SplineManager) return;
+	if (IsEngineExitRequested())
+	{
+		return;
+	}
+	if (!SplineManager || !IsValid(SplineManager))
+	{
+		return;
+	}
 
 	APTSplinePathActor* CastActor = Cast<APTSplinePathActor>(ObjectBeingModified);
-	if (!CastActor)
+	if (!IsValid(CastActor))
 	{
 		return;
 	}
